@@ -6,7 +6,7 @@ log "===Infrastructure preperation script - cluster-create.sh Initiated==="
 log "Start creating infrastructure with Terraform"
 cd $script_path
 terraform init
-terraform apply 
+terraform apply -input=false -auto-approve
 
 ##Run Ansible configurations
 log "Quick sleep while instances start and SSH is ready to serve"
