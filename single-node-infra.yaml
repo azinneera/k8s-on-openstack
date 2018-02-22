@@ -1,5 +1,5 @@
 ################################################################################
-#   Copyright (c) 2017, WSO2 Inc. (http://www.wso2.org) All Rights Reserved
+#   Copyright (c) 2018, WSO2 Inc. (http://www.wso2.org) All Rights Reserved
 #
 #   Licensed under the Apache License, Version 2.0 (the \"License\");
 #   you may not use this file except in compliance with the License.
@@ -14,34 +14,58 @@
 #   limitations under the License.
 ################################################################################
 
+
 # TestGrid Test Configuration Parameters
-productName: "wso2is5.4.0LTS"
-deploymentPatterns:
-    -  "cloudformation-templates/pattern-1"
-infraParams:
-  - DBEngine: "mysql"
-    DBEngineVersion:
-      - "5.6.35"
-    JDK:
-        - "ORACLE_JDK8"
-scenarios:
-    -  "scenario02"
-    -  "scenario12"
-    -  "scenario18"    
-    -  "scenario21"
-    -  "scenario28"
-infrastructure:
-  providerType: "SHELL"
-  clusterType: "None"
-  region: "us-east-1"
-  instanceType: "EC2"
-  name: "cloudformation-templates/pattern-2"
-  securityProperties:
-    apiKey: "242424"
-    sshKey: "abc.key"
-  scripts:
-    - scriptType: "INFRA_CREATE"
-      filePath: "infra.sh"
-    - scriptType: "INFRA_DESTROY"
-      filePath: "cluster-destroy.sh"  
-   
+# TODO use dash as the separator instead of camelCase.
+version: '0.9'
+infrastructureConfig:
+  iacProvider: TERRAFORM
+  infrastructureProvider: SHELL
+  containerOrchestrationEngine: K8S
+  parameters:
+    - JDK : ORACLE_JDK8
+  provisioners:
+    - name: deployment-pattern-1
+      description: Provision Infra for 2 node IS cluster
+      dir: .
+      scripts:
+        - name: infra-for-apim-deployment
+          description: Creates infrastructure for a IS-pattern1.
+          type: SHELL
+          phase: CREATE
+          file: infra.sh
+          inputParameters:
+            node-count: "2"
+            image-name: "K8S-COREOS-Optimized"
+            image-flavor: "m1.medium"
+            network: "testgrid_private_network"
+            key-pair: "jenkins-slave-pubkey"
+        - name: destroy
+          file: cluster-destroy.sh
+          type: SHELL
+          phase: DESTROY
+#  inputParameters:
+#    - name : ami_id
+#      type : <list>
+#    - name : sshKey
+#      type : <string>
+scenarioConfig:
+  scenarios:
+    -  "scenario01"
+deploymentConfig:
+  deploymentPatterns:
+    - name: perform-is-pattern-1-deployment
+      description: Deploy IS nodes in k8s
+      dir: .
+#      inputsForInfrastructurefile:
+#          - requiredVMCount: 2
+      scripts:
+        - type: SHELL
+          description: Do an IS deployment.
+          file: "deploy.sh"
+          inputParameters:
+            docker-username: "testgrid@wso2.com"
+            docker-password: ****"
+            network-drive: "192.168.89.206"
+          name: "deploy"
+          phase: CREATE
