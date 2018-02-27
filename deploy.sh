@@ -40,6 +40,8 @@ while [ "$1" != "" ]; do
 done
 
 export KUBERNETES_MASTER=$KUBERNETES_MASTER
+echo $KUBERNETES_MASTER
+env | grep "KUBERNETES_MASTER"
 
 DOCKER_URL="dockerhub.private.wso2.com"
 
