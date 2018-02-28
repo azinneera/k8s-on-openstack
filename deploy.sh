@@ -1,26 +1,47 @@
 #!/bin/bash
-# ------------------------------------------------------------------------
-#
-# Copyright 2018 WSO2, Inc. (http://wso2.com)
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-# http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-#
-
-# ------------------------------------------------------------------------
-
-export KUBERNETES_MASTER=$1
 artefacts_dir="kubernetes-is"
 default_port=32111
+
+while [ "$1" != "" ]; do
+    PARAM=`echo $1 | awk -F= '{print $1}'`
+    VALUE=`echo $1 | awk -F= '{print $2}'`
+    case $PARAM in
+        -h | --help)
+     #       usage
+            exit
+            ;;
+        --KUBERNETES_MASTER | -km )
+            KUBERNETES_MASTER=$VALUE
+            echo $KUBERNETES_MASTER
+            ;;
+        --docker-username | -du )
+            USERNAME=$VALUE
+            echo $USERNAME
+            ;;
+        --docker-password | -dp )
+            PASSWORD=$VALUE
+            echo $PASSWORD
+            ;;            
+        --network-drive | -nfs )
+            NFS=$VALUE
+            echo $NFS
+            ;;    
+        --output-dir | -o )
+            OUTPUT=$VALUE
+            echo $OUTPUT
+            ;;             
+        *)
+            echo "ERROR: unknown parameter \"$PARAM\""
+          #  usage
+            exit 1
+            ;;
+    esac
+    shift
+done
+
+export KUBERNETES_MASTER=$KUBERNETES_MASTER
+
+DOCKER_URL="dockerhub.private.wso2.com"
 
 # Log Message should be parsed $1
 log(){
@@ -34,7 +55,7 @@ temp=${1#*//}
 Master_IP=${temp%:*}
 prgdir=$(dirname "$0")
 script_path=$(cd "$prgdir"; pwd)
-source "base.sh"
+source "$script_path/base.sh"
 
 while getopts :h FLAG; do
     case $FLAG in
@@ -49,14 +70,17 @@ done
 
 validateKubeCtlConfig
 
+kubectl create secret docker-registry registrykey --docker-server=$DOCKER_URL --docker-username=$USERNAME --docker-password=$PASSWORD --docker-email="$USERNAME@wso2.com"
+
 # download IS 5.4.0 docker images
 nodes=$(kubectl get nodes --output=jsonpath='{ $.items[*].status.addresses[?(@.type=="LegacyHostIP")].address }')
 delete=($Master_IP)
 nodes=( "${nodes[@]/$delete}" )
 
+cd $script_path
 echo "Loading docker images to nodes..."
 for node in $nodes; do
-     ssh core@$node "bash -s" < load-docker-images.sh $2
+     ssh core@$node "bash -s" < $script_path/load-docker-images.sh $NFS
 done
 
 echo "Cloning into repo kubernetes-is..."
@@ -67,13 +91,13 @@ fi
 env -i git clone https://github.com/wso2/kubernetes-is.git
 
 #change directory to pattern-1
-cd kubernetes-is/pattern-1
+cd $script_path/kubernetes-is/pattern-1
 
 #Replace NFS server IP
 echo "Adding NFS server IP"
-sed -i -E 's/server:\s+[0-9.]{7,15}/server: '$2'/g' is-nfs-persistent-volume.yaml
-sed -i -E 's/image: docker.wso2.com/image: '$3'/g' mysql-deployment.yaml
-sed -i -E 's/image: docker.wso2.com/image: '$3'/g' is-deployment.yaml
+sed -i -E 's/server:\s+[0-9.]{7,15}/server: '$NFS'/g' is-nfs-persistent-volume.yaml
+sed -i -E 's/image: docker.wso2.com/image: '$DOCKER_URL'/g' mysql-deployment.yaml
+sed -i -E 's/image: docker.wso2.com/image: '$DOCKER_URL'/g' is-deployment.yaml
 
 #1-Create NFS persistent volume
 echo "Creating NFS persistent volume..."
@@ -127,21 +151,23 @@ kubectl create -f is-ingress.yaml
 sleep 30
 
 echo 'Generating the deployment.json..'
-default "${default_port}"
 pods=$(kubectl get pods --output=jsonpath={.items..metadata.name})
 json='{ "hosts" : ['
 for pod in $pods; do
          hostip=$(kubectl get pods "$pod" --output=jsonpath={.status.hostIP})
          echo $hostip
-         lable=$(kubectl get pods "$pod" --output=jsonpath={.metadata.labels.name})
-         echo $lable
-         servicedata=$(kubectl describe svc "$lable")
+	 label=$(kubectl get pods "$pod" --output=jsonpath={.metadata.name})
+	 echo $label
+	 deployment=$(kubectl get pods "$pod" --output=jsonpath={.spec.containers[].name})
+	 echo $deployment
+	 servicedata=$(kubectl describe svc "$deployment-service")
          echo $servicedata
-         json+='{"ip" :"'$hostip'", "label" :"'$lable'", "ports" :['
-         declare -a dataarray=($servicedata)
-         let count=0
-         for data in ${dataarray[@]}  ; do
-            if [ "$data" = "NodePort:" ]; then
+
+	 json+='{"ip" :"'$hostip'", "label" :"'$label'", "ports" :['
+	 declare -a dataarray=($servicedata)
+	 let count=0
+	 for data in ${dataarray[@]}  ; do
+            if [ "$data" = "Port:" ]; then
             IFS='/' read -a myarray <<< "${dataarray[$count+2]}"
             json+='{'
             json+='"protocol" :"'${dataarray[$count+1]}'",  "portNumber" :"'${myarray[0]}'"'
@@ -150,6 +176,7 @@ for pod in $pods; do
 
          ((count+=1))
          done
+
          i=$((${#json}-1))
          lastChr=${json:$i:1}
 
