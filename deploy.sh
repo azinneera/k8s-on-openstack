@@ -32,8 +32,6 @@ while [ "$1" != "" ]; do
             ;;             
         *)
             echo "ERROR: unknown parameter \"$PARAM\""
-          #  usage
-            exit 1
             ;;
     esac
     shift
@@ -152,43 +150,29 @@ kubectl create -f is-ingress.yaml
 
 sleep 30
 
-echo 'Generating the deployment.json..'
-pods=$(kubectl get pods --output=jsonpath={.items..metadata.name})
-json='{ "hosts" : ['
-for pod in $pods; do
-         hostip=$(kubectl get pods "$pod" --output=jsonpath={.status.hostIP})
-         echo $hostip
-	 label=$(kubectl get pods "$pod" --output=jsonpath={.metadata.name})
-	 echo $label
-	 deployment=$(kubectl get pods "$pod" --output=jsonpath={.spec.containers[].name})
-	 echo $deployment
-	 servicedata=$(kubectl describe svc "$deployment-service")
-         echo $servicedata
 
-	 json+='{"ip" :"'$hostip'", "label" :"'$label'", "ports" :['
-	 declare -a dataarray=($servicedata)
-	 let count=0
-	 for data in ${dataarray[@]}  ; do
-            if [ "$data" = "Port:" ]; then
-            IFS='/' read -a myarray <<< "${dataarray[$count+2]}"
-            json+='{'
-            json+='"protocol" :"'${dataarray[$count+1]}'",  "portNumber" :"'${myarray[0]}'"'
-            json+="},"
-            fi
-
-         ((count+=1))
-         done
-
-         i=$((${#json}-1))
-         lastChr=${json:$i:1}
-
-         if [ "$lastChr" = "," ]; then
-         json=${json:0:${#json}-1}
-         fi
-
-         json+="]},"
-
+ingress=$(kubectl get ingress --output=jsonpath='{ $.items[*].metadata.name}')
+for item in $ingress; do
+    address=$(kubectl get ingress $item --output=jsonpath='{ $.status.loadBalancer.ingress[*].ip}')
+    hosts=$(kubectl get ingress $item --output=jsonpath='{$.spec.rules[*].host}')
+    str=$address" "$hosts
+    sudo sed -i "/The following lines are desirable for IPv6 capable hosts/i\\$str" /etc/hosts
 done
+
+echo 'Generating the deployment.json..'
+
+#create deployment.json
+json='{ "hosts" : ['
+ingress=$(kubectl get ingress --output=jsonpath={.items[*].spec.rules[*].host})
+for item in $ingress; do
+         json+='{"ip" :"'$item'", "label" :"'$item'", "ports" :['
+            json+='{'
+            json+='"protocol" : "servlet-http",  "portNumber" :"80"},{'
+            json+='"protocol" : "servlet-https",  "portNumber" :"443"'
+            json+="}"
+         json+="]},"
+done
+
 json=${json:0:${#json}-1}
 
 json+="]}"
