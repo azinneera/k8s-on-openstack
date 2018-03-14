@@ -99,7 +99,6 @@ while [ "$1" != "" ]; do
         *)
             echo "ERROR: unknown parameter \"$PARAM\""
             usage
-            exit 1
         ;;
     esac
     shift
