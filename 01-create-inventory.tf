@@ -25,6 +25,6 @@ resource "null_resource" "ansible-provision" {
 
 # Exporting the Kubenetes Master URL
 provisioner "local-exec" {
-    command =  "echo \"KUBERNETES_MASTER=http://${openstack_compute_instance_v2.k8s-master.network.0.fixed_ip_v4}:8080\" > k8s.properties"
+    command =  "echo \"--KUBERNETES_MASTER=http://${openstack_compute_instance_v2.k8s-master.network.0.fixed_ip_v4}:8080\" > k8s.properties"
   }
 }
