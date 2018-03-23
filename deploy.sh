@@ -26,7 +26,7 @@ while [ "$1" != "" ]; do
             NFS=$VALUE
             echo $NFS
             ;;    
-        --output-dir | -o )
+        --workspace | -o )
             OUTPUT=$VALUE
             echo $OUTPUT
             ;;             
@@ -150,7 +150,7 @@ kubectl create -f is-ingress.yaml
 
 sleep 30
 
-
+echo "Adding host details to /etc/hosts..."
 ingress=$(kubectl get ingress --output=jsonpath='{ $.items[*].metadata.name}')
 for item in $ingress; do
     address=$(kubectl get ingress $item --output=jsonpath='{ $.status.loadBalancer.ingress[*].ip}')
@@ -178,6 +178,6 @@ json=${json:0:${#json}-1}
 json+="]}"
 echo $json;
 
-cat > $script_path/deployment.json << EOF1
+cat > $OUTPUT/deployment.json << EOF1
 $json
 EOF1
